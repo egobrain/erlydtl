@@ -83,10 +83,10 @@ compile(File, Module) ->
 compile(Binary, Module, Options) when is_binary(Binary) ->
     File = "",
     CheckSum = "",
+    Context = init_dtl_context(File, Module, Options),
     case parse(Binary) of
         {ok, DjangoParseTree} ->
-            case compile_to_binary(File, DjangoParseTree, 
-                    init_dtl_context(File, Module, Options), CheckSum) of
+            case compile_to_binary(File, Binary, DjangoParseTree, Context, CheckSum) of
                 {ok, Module1, _, _} ->
                     {ok, Module1};
                 Err ->
@@ -101,8 +101,8 @@ compile(File, Module, Options) ->
     case parse(File, Context) of  
         ok ->
             ok;
-        {ok, DjangoParseTree, CheckSum} ->
-            case compile_to_binary(File, DjangoParseTree, Context, CheckSum) of
+        {ok, Binary, DjangoParseTree, CheckSum} ->
+            case compile_to_binary(File, Binary, DjangoParseTree, Context, CheckSum) of
                 {ok, Module1, Bin, Warnings} ->
                     write_binary(Module1, Bin, Options, Warnings);
                 Err ->
@@ -201,12 +201,12 @@ compile_multiple_to_binary(Dir, ParserResults, Context) ->
     Forms = custom_forms(Dir, Context#dtl_context.module, Functions, AstInfo),
     compile_forms_and_reload(Dir, Forms, Context#dtl_context.compiler_options).
 
-compile_to_binary(File, DjangoParseTree, Context, CheckSum) ->
+compile_to_binary(File, Binary, DjangoParseTree, Context, CheckSum) ->
     try body_ast(DjangoParseTree, Context, #treewalker{}) of
         {{BodyAst, BodyInfo}, BodyTreeWalker} ->
             try custom_tags_ast(BodyInfo#ast_info.custom_tags, Context, BodyTreeWalker) of
                 {{CustomTagsAst, CustomTagsInfo}, _} ->
-                    Forms = forms(File, Context#dtl_context.module, {BodyAst, BodyInfo}, 
+                    Forms = forms(File, Binary, Context#dtl_context.module, {BodyAst, BodyInfo}, 
                         {CustomTagsAst, CustomTagsInfo}, Context#dtl_context.binary_strings, CheckSum), 
                     compile_forms_and_reload(File, Forms, Context#dtl_context.compiler_options)
             catch 
@@ -324,7 +324,7 @@ parse(CheckSum, Data, Context) ->
         _ ->
             case parse(Data) of
                 {ok, Val} ->
-                    {ok, Val, CheckSum};
+                    {ok, Data, Val, CheckSum};
                 Err ->
                     Err
             end
@@ -428,7 +428,7 @@ custom_forms(Dir, Module, Functions, AstInfo) ->
     [erl_syntax:revert(X) || X <- [ModuleAst, ExportAst, SourceFunctionAst, DependenciesFunctionAst, TranslatableStringsFunctionAst
             | FunctionAsts] ++ AstInfo#ast_info.pre_render_asts].
 
-forms(File, Module, {BodyAst, BodyInfo}, {CustomTagsFunctionAst, CustomTagsInfo}, BinaryStrings, CheckSum) ->
+forms(File, Binary, Module, {BodyAst, BodyInfo}, {CustomTagsFunctionAst, CustomTagsInfo}, BinaryStrings, CheckSum) ->
     MergedInfo = merge_info(BodyInfo, CustomTagsInfo),
     Render0FunctionAst = erl_syntax:function(erl_syntax:atom(render),
         [erl_syntax:clause([], none, [erl_syntax:application(none, 
@@ -447,7 +447,11 @@ forms(File, Module, {BodyAst, BodyInfo}, {CustomTagsFunctionAst, CustomTagsInfo}
     Render2FunctionAst = erl_syntax:function(erl_syntax:atom(render),
         [erl_syntax:clause([erl_syntax:variable("_Variables"),
                     erl_syntax:variable("RenderOptions")], none, 
-            [erl_syntax:try_expr([Function2], [ClauseOk], [ClauseCatch])])]),  
+            [erl_syntax:try_expr([Function2], [ClauseOk], [ClauseCatch])])]),
+
+    TemplateFunction = erl_syntax:function(erl_syntax:atom(template),
+        [erl_syntax:clause([], none, [
+                    erl_syntax:abstract(Binary)])]),
      
     SourceFunctionTuple = erl_syntax:tuple(
         [erl_syntax:string(File), erl_syntax:string(CheckSum)]),
@@ -487,6 +491,7 @@ forms(File, Module, {BodyAst, BodyInfo}, {CustomTagsFunctionAst, CustomTagsInfo}
                     erl_syntax:arity_qualifier(erl_syntax:atom(render), erl_syntax:integer(1)),
                     erl_syntax:arity_qualifier(erl_syntax:atom(render), erl_syntax:integer(2)),
                     erl_syntax:arity_qualifier(erl_syntax:atom(source), erl_syntax:integer(0)),
+                    erl_syntax:arity_qualifier(erl_syntax:atom(template), erl_syntax:integer(0)),
                     erl_syntax:arity_qualifier(erl_syntax:atom(dependencies), erl_syntax:integer(0)),
                     erl_syntax:arity_qualifier(erl_syntax:atom(translatable_strings), erl_syntax:integer(0)),
                     erl_syntax:arity_qualifier(erl_syntax:atom(translated_blocks), erl_syntax:integer(0)),
@@ -496,7 +501,7 @@ forms(File, Module, {BodyAst, BodyInfo}, {CustomTagsFunctionAst, CustomTagsInfo}
     [erl_syntax:revert(X) || X <- [ModuleAst, ExportAst, Render0FunctionAst, Render1FunctionAst, Render2FunctionAst,
             SourceFunctionAst, DependenciesFunctionAst, TranslatableStringsAst,
             TranslatedBlocksAst, VariablesAst, RenderInternalFunctionAst, 
-            CustomTagsFunctionAst | BodyInfo#ast_info.pre_render_asts]].    
+            CustomTagsFunctionAst, TemplateFunction | BodyInfo#ast_info.pre_render_asts]].
 
 options_match_ast() -> 
     [
