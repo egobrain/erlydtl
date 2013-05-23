@@ -118,6 +118,8 @@ Nonterminals
 
     WidthRatioTag
 
+    WidgetTag
+
     WithBlock
     WithBraced
     EndWithBraced
@@ -192,6 +194,7 @@ Terminals
     closecomment_keyword
     trans_keyword
     widthratio_keyword
+    widget_keyword
     with_keyword
     ',' '|' '=' ':' '.'
     '==' '!='
@@ -236,6 +239,7 @@ Elements -> Elements TemplatetagTag : '$1' ++ ['$2'].
 Elements -> Elements TransTag : '$1' ++ ['$2'].
 Elements -> Elements ValueBraced : '$1' ++ ['$2'].
 Elements -> Elements WidthRatioTag : '$1' ++ ['$2'].
+Elements -> Elements WidgetTag : '$1' ++ ['$2'].
 Elements -> Elements WithBlock : '$1' ++ ['$2'].
 
 ValueBraced -> open_var Value close_var : '$2'.
@@ -375,6 +379,8 @@ TransTag -> open_tag trans_keyword string_literal noop_keyword close_tag : '$3'.
 TransTag -> open_tag trans_keyword Variable noop_keyword close_tag : '$3'.
 
 WidthRatioTag -> open_tag widthratio_keyword Value Value number_literal close_tag : {widthratio, '$3', '$4', '$5'}.
+
+WidgetTag -> open_tag widget_keyword identifier close_tag : {widget, '$3'}.
 
 WithBlock -> WithBraced Elements EndWithBraced : {with, '$1', '$2'}.
 WithBraced -> open_tag with_keyword Args close_tag : '$3'.

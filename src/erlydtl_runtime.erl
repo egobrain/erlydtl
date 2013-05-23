@@ -282,3 +282,25 @@ read_file(Module, Function, DocRoot, FileName) ->
     end,
     {ok, Binary} = Module:Function(AbsName),
     binary_to_list(Binary).
+
+
+widget(WidgetId, FilePath, RenderOptions) ->
+	{Path, Widgets} = case lists:keyfind(widgets, 1, RenderOptions) of
+						  {widgets, Path0, Widgets0} ->
+							  {Path0, Widgets0};
+						  _ ->
+							  {[], []}
+					  end,
+	Path2 = [WidgetId | Path],
+	<<"-", BinId/binary>> = << <<"-", (list_to_binary(atom_to_list(A)))/binary>> || A <- Path2 >>,
+	Data = case lists:keyfind(WidgetId, 1, Widgets) of
+			   {WidgetId, WidgetFun} ->
+				   WidgetFun(Path2, BinId, FilePath);
+			   _ ->
+				   <<"">>
+		   end,
+	[
+	 <<"<div widget-id='", BinId/binary, "'>\n">>,
+	 Data,
+	 <<"\n</div>">>
+	].

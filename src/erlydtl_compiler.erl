@@ -647,6 +647,8 @@ body_ast(DjangoParseTree, Context, TreeWalker) ->
                 translated_ast(Value, Context, TreeWalkerAcc);
             ({'widthratio', Numerator, Denominator, Scale}, TreeWalkerAcc) ->
                 widthratio_ast(Numerator, Denominator, Scale, Context, TreeWalkerAcc);
+            ({'widget', {identifier, _, WidgetId}}, TreeWalkerAcc) ->
+                widget_ast(WidgetId, Context, TreeWalkerAcc);
             ({'with', Args, Contents}, TreeWalkerAcc) ->
                 with_ast(Args, Contents, Context, TreeWalkerAcc);
             (ValueToken, TreeWalkerAcc) -> 
@@ -831,6 +833,20 @@ widthratio_ast(Numerator, Denominator, Scale, Context, TreeWalker) ->
                 erl_syntax:atom(widthratio),
                 [NumAst, DenAst, ScaleAst])), merge_info(ScaleInfo, merge_info(NumInfo, DenInfo))},
         TreeWalker3}.
+
+widget_ast(WidgetID, Context, TreeWalker) ->
+	DocRoot = Context#dtl_context.doc_root,
+	Path = lists:last(Context#dtl_context.parse_trail),
+	FilePath = Path -- DocRoot,
+	WidgetAst = erl_syntax:application(
+				  erl_syntax:atom(erlydtl_runtime),
+				  erl_syntax:atom(widget),
+				  [
+				   erl_syntax:atom(WidgetID),
+				   erl_syntax:abstract(list_to_binary(FilePath)),
+				   erl_syntax:variable('RenderOptions')
+				  ]),
+	{{WidgetAst, #ast_info{}}, TreeWalker}.
 
 binary_string(String) ->
     erl_syntax:binary([erl_syntax:binary_field(erl_syntax:integer(X)) || X <- String]).
