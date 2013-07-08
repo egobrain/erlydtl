@@ -39,6 +39,7 @@
 %% Definitions
 %% --------------------------------------------------------------------
 -export([compile/2, compile/3, compile_dir/2, compile_dir/3, parse/1]).
+-export([compile_ast/2]).
 
 -record(dtl_context, {
     local_scopes = [], 
@@ -111,7 +112,38 @@ compile(File, Module, Options) ->
         Err ->
             Err
     end.
-    
+
+compile_ast(Binary, Module) when is_binary(Binary) ->
+    File = "",
+    CheckSum = "",
+	Options = [],
+    Context = init_dtl_context(File, Module, Options),
+    case parse(Binary) of
+        {ok, DjangoParseTree} ->
+            case compile_to_ast(File, Binary, DjangoParseTree, Context, CheckSum) of
+                {ok, Module1, _, _} ->
+                    {ok, Module1};
+                Err ->
+                    Err
+            end;
+        Err ->
+            Err
+    end.
+
+compile_to_ast(File, Binary, DjangoParseTree, Context, CheckSum) ->
+    try body_ast(DjangoParseTree, Context, #treewalker{}) of
+        {{BodyAst, BodyInfo}, BodyTreeWalker} ->
+            try custom_tags_ast(BodyInfo#ast_info.custom_tags, Context, BodyTreeWalker) of
+                {{CustomTagsAst, CustomTagsInfo}, _} ->
+                    Forms = forms(File, Binary, Context#dtl_context.module, {BodyAst, BodyInfo}, 
+                        {CustomTagsAst, CustomTagsInfo}, Context#dtl_context.binary_strings, CheckSum), 
+					{ok, [], Forms}
+            catch 
+                throw:Error -> Error
+            end
+    catch 
+        throw:Error -> Error
+    end.
 
 compile_dir(Dir, Module) ->
     compile_dir(Dir, Module, []).
@@ -206,7 +238,7 @@ compile_to_binary(File, Binary, DjangoParseTree, Context, CheckSum) ->
         {{BodyAst, BodyInfo}, BodyTreeWalker} ->
             try custom_tags_ast(BodyInfo#ast_info.custom_tags, Context, BodyTreeWalker) of
                 {{CustomTagsAst, CustomTagsInfo}, _} ->
-                    Forms = forms(File, Binary, Context#dtl_context.module, {BodyAst, BodyInfo}, 
+                    Forms = module_forms(File, Binary, Context#dtl_context.module, {BodyAst, BodyInfo}, 
                         {CustomTagsAst, CustomTagsInfo}, Context#dtl_context.binary_strings, CheckSum), 
                     compile_forms_and_reload(File, Forms, Context#dtl_context.compiler_options)
             catch 
@@ -428,7 +460,12 @@ custom_forms(Dir, Module, Functions, AstInfo) ->
     [erl_syntax:revert(X) || X <- [ModuleAst, ExportAst, SourceFunctionAst, DependenciesFunctionAst, TranslatableStringsFunctionAst
             | FunctionAsts] ++ AstInfo#ast_info.pre_render_asts].
 
-forms(File, Binary, Module, {BodyAst, BodyInfo}, {CustomTagsFunctionAst, CustomTagsInfo}, BinaryStrings, CheckSum) ->
+module_forms(File, Binary, Module, {BodyAst, BodyInfo}, {CustomTagsFunctionAst, CustomTagsInfo}, BinaryStrings, CheckSum) ->
+	ModuleAst  = erl_syntax:attribute(erl_syntax:atom(module), [erl_syntax:atom(Module)]),
+	{ExportAst, FunctionsAst} = forms(File, Binary, Module, {BodyAst, BodyInfo}, {CustomTagsFunctionAst, CustomTagsInfo}, BinaryStrings, CheckSum),
+	lists:flatten([ModuleAst, ExportAst, FunctionsAst]).
+
+forms(File, Binary, _Module, {BodyAst, BodyInfo}, {CustomTagsFunctionAst, CustomTagsInfo}, BinaryStrings, CheckSum) ->
     MergedInfo = merge_info(BodyInfo, CustomTagsInfo),
     Render0FunctionAst = erl_syntax:function(erl_syntax:atom(render),
         [erl_syntax:clause([], none, [erl_syntax:application(none, 
@@ -484,7 +521,7 @@ forms(File, Binary, Module, {BodyAst, BodyInfo}, {CustomTagsFunctionAst, CustomT
             none, BodyAstTmp)]
     ),   
     
-    ModuleAst  = erl_syntax:attribute(erl_syntax:atom(module), [erl_syntax:atom(Module)]),
+
     
     ExportAst = erl_syntax:attribute(erl_syntax:atom(export),
         [erl_syntax:list([erl_syntax:arity_qualifier(erl_syntax:atom(render), erl_syntax:integer(0)),
@@ -498,10 +535,11 @@ forms(File, Binary, Module, {BodyAst, BodyInfo}, {CustomTagsFunctionAst, CustomT
                     erl_syntax:arity_qualifier(erl_syntax:atom(variables), erl_syntax:integer(0))
                 ])]),
     
-    [erl_syntax:revert(X) || X <- [ModuleAst, ExportAst, Render0FunctionAst, Render1FunctionAst, Render2FunctionAst,
-            SourceFunctionAst, DependenciesFunctionAst, TranslatableStringsAst,
-            TranslatedBlocksAst, VariablesAst, RenderInternalFunctionAst, 
-            CustomTagsFunctionAst, TemplateFunction | BodyInfo#ast_info.pre_render_asts]].
+    FunctionsAst = [erl_syntax:revert(X) || X <- [Render0FunctionAst, Render1FunctionAst, Render2FunctionAst,
+												  SourceFunctionAst, DependenciesFunctionAst, TranslatableStringsAst,
+												  TranslatedBlocksAst, VariablesAst, RenderInternalFunctionAst, 
+												  CustomTagsFunctionAst, TemplateFunction | BodyInfo#ast_info.pre_render_asts]],
+	{ExportAst, FunctionsAst}.
 
 options_match_ast() -> 
     [
