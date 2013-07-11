@@ -284,23 +284,23 @@ read_file(Module, Function, DocRoot, FileName) ->
     binary_to_list(Binary).
 
 
-widget(WidgetId, FilePath, RenderOptions) ->
-	{Path, Widgets} = case lists:keyfind(widgets, 1, RenderOptions) of
-						  {widgets, Path0, Widgets0} ->
-							  {Path0, Widgets0};
+mount_point(MountPointId, RenderOptions) ->
+	{Path, MountPoints} = case lists:keyfind(widgets, 1, RenderOptions) of
+						  {widgets, Path0, MountPoints0} ->
+							  {Path0, MountPoints0};
 						  _ ->
 							  {[], []}
 					  end,
-	Path2 = [WidgetId | Path],
-	<<"-", BinId/binary>> = << <<"-", (list_to_binary(atom_to_list(A)))/binary>> || A <- Path2 >>,
-	Data = case lists:keyfind(WidgetId, 1, Widgets) of
-			   {WidgetId, WidgetFun} ->
-				   WidgetFun(Path2, BinId, FilePath);
+	Path2 = [MountPointId | Path],
+	BinId = list_to_binary(atom_to_list(MountPointId)),
+	Data = case lists:keyfind(MountPointId, 1, MountPoints) of
+			   {MountPointId, MountPointFun} ->
+				   MountPointFun(Path2);
 			   _ ->
 				   <<"">>
 		   end,
 	[
-	 <<"<div widget-id='", BinId/binary, "'>\n">>,
+	 <<"<div mount-point-id='", BinId/binary, "'>\n">>,
 	 Data,
 	 <<"\n</div>">>
 	].

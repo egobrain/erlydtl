@@ -421,8 +421,8 @@ mark_keywords([{open_tag, _, _} = OpenToken, {identifier, Pos, "templatetag" = S
     mark_keywords(T, lists:reverse([OpenToken, {templatetag_keyword, Pos, String}], Acc));
 mark_keywords([{open_tag, _, _} = OpenToken, {identifier, Pos, "widthratio" = String}|T], Acc) ->
     mark_keywords(T, lists:reverse([OpenToken, {widthratio_keyword, Pos, String}], Acc));
-mark_keywords([{open_tag, _, _} = OpenToken, {identifier, Pos, "widget" = String}|T], Acc) ->
-    mark_keywords(T, lists:reverse([OpenToken, {widget_keyword, Pos, String}], Acc));
+mark_keywords([{open_tag, _, _} = OpenToken, {identifier, Pos, "mount_point" = String}|T], Acc) ->
+    mark_keywords(T, lists:reverse([OpenToken, {mount_point_keyword, Pos, String}], Acc));
 mark_keywords([{open_tag, _, _} = OpenToken, {identifier, Pos, "call" = String}|T], Acc) ->
     mark_keywords(T, lists:reverse([OpenToken, {call_keyword, Pos, String}], Acc));
 mark_keywords([{open_tag, _, _} = OpenToken, {identifier, Pos, "endwith" = String}|T], Acc) ->
